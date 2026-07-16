@@ -114,8 +114,8 @@
 macro_rules! cfg_client {
     ($($item:item)*) => {
         $(
-            #[cfg_attr(docsrs, doc(cfg(feature = "client")))]
-            #[cfg(feature = "client")]
+            #[cfg_attr(docsrs, doc(cfg(any(feature = "client", feature = "wasi-client"))))]
+            #[cfg(any(feature = "client", feature = "wasi-client"))]
             $item
         )*
     }
@@ -123,8 +123,8 @@ macro_rules! cfg_client {
 macro_rules! cfg_config {
     ($($item:item)*) => {
         $(
-            #[cfg_attr(docsrs, doc(cfg(feature = "config")))]
-            #[cfg(feature = "config")]
+            #[cfg_attr(docsrs, doc(cfg(all(feature = "config", not(feature = "wasi-client")))))]
+            #[cfg(all(feature = "config", not(feature = "wasi-client")))]
             $item
         )*
     }
@@ -133,8 +133,8 @@ macro_rules! cfg_config {
 macro_rules! cfg_error {
     ($($item:item)*) => {
         $(
-            #[cfg_attr(docsrs, doc(cfg(any(feature = "config", feature = "client"))))]
-            #[cfg(any(feature = "config", feature = "client"))]
+            #[cfg_attr(docsrs, doc(cfg(any(feature = "config", feature = "client", feature = "wasi-client"))))]
+            #[cfg(any(feature = "config", feature = "client", feature = "wasi-client"))]
             $item
         )*
     }
@@ -184,7 +184,8 @@ pub use kube_derive::KubeSchema;
 pub use kube_runtime as runtime;
 
 pub use crate::core::{CustomResourceExt, Resource, ResourceExt};
-#[doc(inline)] pub use kube_core as core;
+#[doc(inline)]
+pub use kube_core as core;
 
 // Mock tests for the runtime
 #[cfg(test)]
@@ -204,16 +205,19 @@ pub mod prelude {
     //!
     //! The prelude may grow over time as additional items see ubiquitous use.
 
-    #[cfg(feature = "client")] pub use crate::client::ConfigExt as _;
+    #[cfg(any(feature = "client", feature = "wasi-client"))]
+    pub use crate::client::ConfigExt as _;
 
-    #[cfg(feature = "unstable-client")] pub use crate::client::scope::NamespacedRef;
+    #[cfg(feature = "unstable-client")]
+    pub use crate::client::scope::NamespacedRef;
 
     pub use crate::{
         Resource as _, ResourceExt as _,
         core::{PartialObjectMetaExt as _, SelectorExt as _, crd::CustomResourceExt as _},
     };
 
-    #[cfg(feature = "runtime")] pub use crate::runtime::utils::WatchStreamExt as _;
+    #[cfg(feature = "runtime")]
+    pub use crate::runtime::utils::WatchStreamExt as _;
 }
 
 // Tests that require a cluster and the complete feature set
@@ -287,11 +291,14 @@ mod test {
         let foos: Api<Foo> = Api::default_namespaced(client.clone());
         // Apply from generated struct
         {
-            let foo = Foo::new("baz", FooSpec {
-                name: "baz".into(),
-                info: Some("old baz".into()),
-                replicas: 1,
-            });
+            let foo = Foo::new(
+                "baz",
+                FooSpec {
+                    name: "baz".into(),
+                    info: Some("old baz".into()),
+                    replicas: 1,
+                },
+            );
             let o = foos.patch("baz", &ssapply, &Patch::Apply(&foo)).await?;
             assert_eq!(o.spec.name, "baz");
             let oref = o.object_ref(&());

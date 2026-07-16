@@ -16,11 +16,14 @@ default = ["client", "rustls-tls", "ring"]
 #! See [kube.rs/features](https://kube.rs/features/) for more details
 
 ## default client
-client = ["kube-client/client", "config"]
+client = ["kube-client/client", "config", "kube-runtime?/client"]
 ## default config
 config = ["kube-client/config"]
 ## default tls stack
 rustls-tls = ["kube-client/rustls-tls", "client"]
+## wasi client
+wasi-client = ["kube-client/wasi-client", "wasi-config", "kube-runtime?/wasi-client"]
+wasi-config = ["kube-client/wasi-config"]
 
 ## legacy tls stack (must disable rustls-tls to use)
 openssl-tls = ["kube-client/openssl-tls", "client"]
@@ -74,7 +77,7 @@ workspace = true
 kube-derive = { path = "../kube-derive", version = "=4.0.0", optional = true }
 kube-core = { path = "../kube-core", version = "=4.0.0" }
 kube-client = { path = "../kube-client", version = "=4.0.0", default-features = false, optional = true }
-kube-runtime = { path = "../kube-runtime", version = "=4.0.0", optional = true}
+kube-runtime = { path = "../kube-runtime", version = "=4.0.0", default-features = false, optional = true}
 # Not used directly, but required by resolver 2.0 to ensure that the k8s-openapi dependency
 # is considered part of the "deps" graph rather than just the "dev-deps" graph
 k8s-openapi.workspace = true

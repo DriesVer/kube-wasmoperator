@@ -61,8 +61,22 @@
 //! - [`Api`](crate::Api) for the generic api methods available on Kubernetes resources
 //! - [k8s-openapi](https://docs.rs/k8s-openapi) for how to create typed kubernetes objects directly
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(feature = "wasi-client", allow(missing_docs))]
 // Nightly clippy (0.1.64) considers Drop a side effect, see https://github.com/rust-lang/rust-clippy/issues/9608
 #![allow(clippy::unnecessary_lazy_evaluations)]
+
+#[cfg(all(feature = "wasi-client", feature = "client"))]
+compile_error!("Features 'client' and 'wasi-client' are mutually exclusive and cannot be enabled together.");
+
+#[cfg(all(feature = "wasi-client", feature = "ws"))]
+compile_error!(
+    "Websocket support is not available for the 'wasi-client' feature. Please disable the 'ws' feature when using 'wasi-client'."
+);
+
+#[cfg(all(feature = "wasi-client", feature = "unstable-client"))]
+compile_error!(
+    "Unstable client support is not available for the 'wasi-client' feature. Please disable the 'unstable-client' feature when using 'wasi-client'."
+);
 
 macro_rules! cfg_client {
     ($($item:item)*) => {
@@ -73,6 +87,17 @@ macro_rules! cfg_client {
         )*
     }
 }
+
+macro_rules! cfg_wasi_client {
+    ($($item:item)*) => {
+        $(
+            #[cfg_attr(docsrs, doc(cfg(feature = "wasi-client")))]
+            #[cfg(feature = "wasi-client")]
+            $item
+        )*
+    }
+}
+
 macro_rules! cfg_config {
     ($($item:item)*) => {
         $(
@@ -83,11 +108,21 @@ macro_rules! cfg_config {
     }
 }
 
+macro_rules! cfg_wasi_config {
+    ($($item:item)*) => {
+        $(
+            #[cfg_attr(docsrs, doc(cfg(feature = "wasi-config")))]
+            #[cfg(feature = "wasi-config")]
+            $item
+        )*
+    }
+}
+
 macro_rules! cfg_error {
     ($($item:item)*) => {
         $(
-            #[cfg_attr(docsrs, doc(cfg(any(feature = "config", feature = "client"))))]
-            #[cfg(any(feature = "config", feature = "client"))]
+            #[cfg_attr(docsrs, doc(cfg(any(feature = "config", feature = "client", feature = "wasi-client"))))]
+            #[cfg(any(feature = "config", feature = "client", feature = "wasi-client"))]
             $item
         )*
     }
@@ -106,10 +141,42 @@ cfg_client! {
     pub use discovery::Discovery;
 }
 
+cfg_wasi_client! {
+    wit_bindgen::generate!({
+        world: "kubernetes",
+        path: "../../wit",
+    });
+
+    pub use local::kube::api as wit_api;
+
+    pub mod wasi_api;
+    pub use wasi_api as api;
+    pub mod discovery;
+    pub mod wasi_client;
+    pub use wasi_client as client;
+
+    #[doc(inline)]
+    pub use wasi_api::{
+        Api, DeleteParams, GetParams, ListParams, Patch, PatchParams, PostParams, Preconditions, PropagationPolicy,
+        ValidationDirective, VersionMatch, WatchParams, LogParams, EvictParams,
+    };
+    #[doc(inline)]
+    pub use wasi_client::Client;
+    #[doc(inline)]
+    pub use discovery::Discovery;
+}
+
 cfg_config! {
     pub mod config;
     #[doc(inline)]
     pub use config::Config;
+}
+
+cfg_wasi_config! {
+    pub mod wasi_config;
+    pub use wasi_config as config;
+    #[doc(inline)]
+    pub use wasi_config::Config;
 }
 
 cfg_error! {

@@ -2,7 +2,8 @@
 use http::Uri;
 use thiserror::Error;
 
-#[allow(deprecated)] pub use kube_core::ErrorResponse;
+#[allow(deprecated)]
+pub use kube_core::ErrorResponse;
 pub use kube_core::Status;
 
 /// Possible errors from the [`Client`](crate::Client)
@@ -69,8 +70,14 @@ pub enum Error {
     BuildRequest(#[source] kube_core::request::Error),
 
     /// Failed to infer config
+    #[cfg(all(feature = "config", not(feature = "wasi-client")))]
     #[error("Failed to infer configuration: {0}")]
     InferConfig(#[source] crate::config::InferConfigError),
+
+    /// Failed to infer config
+    #[cfg(feature = "wasi-client")]
+    #[error("Failed to infer configuration: {0}")]
+    InferConfig(#[source] crate::wasi_config::InferConfigError),
 
     /// Discovery errors
     #[error("Error from discovery: {0}")]
@@ -111,8 +118,24 @@ pub enum Error {
     RefResolve(String),
 
     /// Failed to infer custom configuration
+    #[cfg(all(feature = "config", not(feature = "wasi-client")))]
     #[error("Failed to infer provided configuration: {0}")]
     InferKubeconfig(#[from] crate::config::KubeconfigError),
+
+    #[cfg(feature = "wasi-client")]
+    #[error("WIT API Error: {0:?}")]
+    Wit(crate::wit_api::Error),
+
+    #[cfg(feature = "wasi-client")]
+    #[error("Wasi Error: {0}")]
+    Wasi(String),
+}
+
+#[cfg(feature = "wasi-client")]
+impl From<crate::wit_api::Error> for Error {
+    fn from(e: crate::wit_api::Error) -> Self {
+        Error::Wit(e)
+    }
 }
 
 #[derive(Error, Debug)]

@@ -1,6 +1,7 @@
 [workspace]
 default-members = ["kube"]
-resolver = "1"
+resolver = "2"
+
 members = [
   "kube",
   "kube-client",

@@ -1,7 +1,8 @@
 //! Runs a user-supplied reconciler function on objects when they (or related objects) are updated
 
 use self::runner::Runner;
-#[allow(deprecated)] use crate::watcher::metadata_watcher;
+#[allow(deprecated)]
+use crate::watcher::metadata_watcher;
 use crate::{
     reflector::{
         self, ObjectRef, reflector,
@@ -11,7 +12,7 @@ use crate::{
     utils::{
         Backoff, CancelableJoinHandle, KubeRuntimeStreamExt, StreamBackoff, WatchStreamExt, trystream_try_via,
     },
-    watcher::{self, DefaultBackoff, watcher},
+    watcher::{self, DefaultBackoff, MaybeSend, WatchStream, box_stream, watcher},
 };
 use educe::Educe;
 use futures::{
@@ -29,7 +30,7 @@ use std::{
     task::{Poll, ready},
     time::Duration,
 };
-use stream::BoxStream;
+// removed BoxStream import
 use thiserror::Error;
 use tokio::{runtime::Handle, time::Instant};
 use tracing::{Instrument, info_span};
@@ -691,7 +692,7 @@ where
     K::DynamicType: Eq + Hash,
 {
     // NB: Need to Unpin for stream::select_all
-    trigger_selector: stream::SelectAll<BoxStream<'static, Result<ReconcileRequest<K>, watcher::Error>>>,
+    trigger_selector: stream::SelectAll<WatchStream<'static, Result<ReconcileRequest<K>, watcher::Error>>>,
     trigger_backoff: Box<dyn Backoff + Send>,
     /// [`run`](crate::Controller::run) starts a graceful shutdown when any of these [`Future`]s complete,
     /// refusing to start any new reconciliations but letting any existing ones finish.
@@ -744,11 +745,10 @@ where
         let writer = Writer::<K>::new(dyntype.clone());
         let reader = writer.as_reader();
         let mut trigger_selector = stream::SelectAll::new();
-        let self_watcher = trigger_self(
+        let self_watcher = box_stream(trigger_self(
             reflector(writer, watcher(main_api, wc)).applied_objects(),
             dyntype.clone(),
-        )
-        .boxed();
+        ));
         trigger_selector.push(self_watcher);
         Self {
             trigger_selector,
@@ -803,7 +803,7 @@ where
     /// Prefer [`Controller::new`] if you do not need to share the stream, or do not need pre-filtering.
     #[cfg(feature = "unstable-runtime-stream-control")]
     pub fn for_stream(
-        trigger: impl Stream<Item = Result<K, watcher::Error>> + Send + 'static,
+        trigger: impl Stream<Item = Result<K, watcher::Error>> + MaybeSend + 'static,
         reader: Store<K>,
     ) -> Self
     where
@@ -825,12 +825,12 @@ where
     /// [`dynamic`]: kube_client::core::dynamic
     #[cfg(feature = "unstable-runtime-stream-control")]
     pub fn for_stream_with(
-        trigger: impl Stream<Item = Result<K, watcher::Error>> + Send + 'static,
+        trigger: impl Stream<Item = Result<K, watcher::Error>> + MaybeSend + 'static,
         reader: Store<K>,
         dyntype: K::DynamicType,
     ) -> Self {
         let mut trigger_selector = stream::SelectAll::new();
-        let self_watcher = trigger_self(trigger, dyntype.clone()).boxed();
+        let self_watcher = box_stream(trigger_self(trigger, dyntype.clone()));
         trigger_selector.push(self_watcher);
         Self {
             trigger_selector,
@@ -905,7 +905,10 @@ where
     /// }
     /// # }
     #[cfg(feature = "unstable-runtime-subscribe")]
-    pub fn for_shared_stream(trigger: impl Stream<Item = Arc<K>> + Send + 'static, reader: Store<K>) -> Self
+    pub fn for_shared_stream(
+        trigger: impl Stream<Item = Arc<K>> + MaybeSend + 'static,
+        reader: Store<K>,
+    ) -> Self
     where
         K::DynamicType: Default,
     {
@@ -928,12 +931,12 @@ where
     /// [`dynamic`]: kube_client::core::dynamic
     #[cfg(feature = "unstable-runtime-subscribe")]
     pub fn for_shared_stream_with(
-        trigger: impl Stream<Item = Arc<K>> + Send + 'static,
+        trigger: impl Stream<Item = Arc<K>> + MaybeSend + 'static,
         reader: Store<K>,
         dyntype: K::DynamicType,
     ) -> Self {
         let mut trigger_selector = stream::SelectAll::new();
-        let self_watcher = trigger_self_shared(trigger.map(Ok), dyntype.clone()).boxed();
+        let self_watcher = box_stream(trigger_self_shared(trigger.map(Ok), dyntype.clone()));
         trigger_selector.push(self_watcher);
         Self {
             trigger_selector,
@@ -1015,7 +1018,7 @@ where
             self.dyntype.clone(),
             dyntype,
         );
-        self.trigger_selector.push(child_watcher.boxed());
+        self.trigger_selector.push(box_stream(child_watcher));
         self
     }
 
@@ -1056,7 +1059,7 @@ where
     #[must_use]
     pub fn owns_stream<Child: Resource<DynamicType = ()> + Send + 'static>(
         self,
-        trigger: impl Stream<Item = Result<Child, watcher::Error>> + Send + 'static,
+        trigger: impl Stream<Item = Result<Child, watcher::Error>> + MaybeSend + 'static,
     ) -> Self {
         self.owns_stream_with(trigger, ())
     }
@@ -1072,14 +1075,14 @@ where
     #[must_use]
     pub fn owns_stream_with<Child: Resource + Send + 'static>(
         mut self,
-        trigger: impl Stream<Item = Result<Child, watcher::Error>> + Send + 'static,
+        trigger: impl Stream<Item = Result<Child, watcher::Error>> + MaybeSend + 'static,
         dyntype: Child::DynamicType,
     ) -> Self
     where
         Child::DynamicType: Debug + Eq + Hash + Clone,
     {
         let child_watcher = trigger_owners(trigger, self.dyntype.clone(), dyntype);
-        self.trigger_selector.push(child_watcher.boxed());
+        self.trigger_selector.push(box_stream(child_watcher));
         self
     }
 
@@ -1153,7 +1156,7 @@ where
     #[must_use]
     pub fn owns_shared_stream<Child: Resource<DynamicType = ()> + Send + 'static>(
         self,
-        trigger: impl Stream<Item = Arc<Child>> + Send + 'static,
+        trigger: impl Stream<Item = Arc<Child>> + MaybeSend + 'static,
     ) -> Self {
         self.owns_shared_stream_with(trigger, ())
     }
@@ -1169,14 +1172,14 @@ where
     #[must_use]
     pub fn owns_shared_stream_with<Child: Resource<DynamicType = ()> + Send + 'static>(
         mut self,
-        trigger: impl Stream<Item = Arc<Child>> + Send + 'static,
+        trigger: impl Stream<Item = Arc<Child>> + MaybeSend + 'static,
         dyntype: Child::DynamicType,
     ) -> Self
     where
         Child::DynamicType: Debug + Eq + Hash + Clone,
     {
         let child_watcher = trigger_owners_shared(trigger.map(Ok), self.dyntype.clone(), dyntype);
-        self.trigger_selector.push(child_watcher.boxed());
+        self.trigger_selector.push(box_stream(child_watcher));
         self
     }
 
@@ -1278,7 +1281,7 @@ where
         Other::DynamicType: Debug + Clone + Eq + Hash,
     {
         let other_watcher = trigger_others(watcher(api, wc).touched_objects(), mapper, dyntype);
-        self.trigger_selector.push(other_watcher.boxed());
+        self.trigger_selector.push(box_stream(other_watcher));
         self
     }
 
@@ -1322,7 +1325,7 @@ where
     #[must_use]
     pub fn watches_stream<Other, I>(
         self,
-        trigger: impl Stream<Item = Result<Other, watcher::Error>> + Send + 'static,
+        trigger: impl Stream<Item = Result<Other, watcher::Error>> + MaybeSend + 'static,
         mapper: impl Fn(Other) -> I + Sync + Send + 'static,
     ) -> Self
     where
@@ -1345,7 +1348,7 @@ where
     #[must_use]
     pub fn watches_stream_with<Other, I>(
         mut self,
-        trigger: impl Stream<Item = Result<Other, watcher::Error>> + Send + 'static,
+        trigger: impl Stream<Item = Result<Other, watcher::Error>> + MaybeSend + 'static,
         mapper: impl Fn(Other) -> I + Sync + Send + 'static,
         dyntype: Other::DynamicType,
     ) -> Self
@@ -1356,7 +1359,7 @@ where
         I::IntoIter: Send,
     {
         let other_watcher = trigger_others(trigger, mapper, dyntype);
-        self.trigger_selector.push(other_watcher.boxed());
+        self.trigger_selector.push(box_stream(other_watcher));
         self
     }
 
@@ -1416,7 +1419,7 @@ where
     #[must_use]
     pub fn watches_shared_stream<Other, I>(
         self,
-        trigger: impl Stream<Item = Arc<Other>> + Send + 'static,
+        trigger: impl Stream<Item = Arc<Other>> + MaybeSend + 'static,
         mapper: impl Fn(Arc<Other>) -> I + Sync + Send + 'static,
     ) -> Self
     where
@@ -1439,7 +1442,7 @@ where
     #[must_use]
     pub fn watches_shared_stream_with<Other, I>(
         mut self,
-        trigger: impl Stream<Item = Arc<Other>> + Send + 'static,
+        trigger: impl Stream<Item = Arc<Other>> + MaybeSend + 'static,
         mapper: impl Fn(Arc<Other>) -> I + Sync + Send + 'static,
         dyntype: Other::DynamicType,
     ) -> Self
@@ -1450,7 +1453,7 @@ where
         I::IntoIter: Send,
     {
         let other_watcher = trigger_others_shared(trigger.map(Ok), mapper, dyntype);
-        self.trigger_selector.push(other_watcher.boxed());
+        self.trigger_selector.push(box_stream(other_watcher));
         self
     }
 
@@ -1501,22 +1504,18 @@ where
     ///
     /// If a [`Stream`] is terminated (by emitting [`None`]) then the [`Controller`] keeps running, but the [`Stream`] stops being polled.
     #[must_use]
-    pub fn reconcile_all_on(mut self, trigger: impl Stream<Item = ()> + Send + 'static) -> Self {
+    pub fn reconcile_all_on(mut self, trigger: impl Stream<Item = ()> + MaybeSend + 'static) -> Self {
         let store = self.store();
         let dyntype = self.dyntype.clone();
-        self.trigger_selector.push(
-            trigger
-                .flat_map(move |()| {
-                    let dyntype = dyntype.clone();
-                    stream::iter(store.state().into_iter().map(move |obj| {
-                        Ok(ReconcileRequest {
-                            obj_ref: ObjectRef::from_obj_with(&*obj, dyntype.clone()),
-                            reason: ReconcileReason::BulkReconcile,
-                        })
-                    }))
+        self.trigger_selector.push(box_stream(trigger.flat_map(move |()| {
+            let dyntype = dyntype.clone();
+            stream::iter(store.state().into_iter().map(move |obj| {
+                Ok(ReconcileRequest {
+                    obj_ref: ObjectRef::from_obj_with(&*obj, dyntype.clone()),
+                    reason: ReconcileReason::BulkReconcile,
                 })
-                .boxed(),
-        );
+            }))
+        })));
         self
     }
 
@@ -1560,17 +1559,13 @@ where
     /// ```
     #[cfg(feature = "unstable-runtime-reconcile-on")]
     #[must_use]
-    pub fn reconcile_on(mut self, trigger: impl Stream<Item = ObjectRef<K>> + Send + 'static) -> Self {
-        self.trigger_selector.push(
-            trigger
-                .map(move |obj| {
-                    Ok(ReconcileRequest {
-                        obj_ref: obj,
-                        reason: ReconcileReason::Unknown,
-                    })
-                })
-                .boxed(),
-        );
+    pub fn reconcile_on(mut self, trigger: impl Stream<Item = ObjectRef<K>> + MaybeSend + 'static) -> Self {
+        self.trigger_selector.push(box_stream(trigger.map(move |obj| {
+            Ok(ReconcileRequest {
+                obj_ref: obj,
+                reason: ReconcileReason::Unknown,
+            })
+        })));
         self
     }
 
@@ -1636,6 +1631,7 @@ where
     #[must_use]
     pub fn shutdown_on_signal(mut self) -> Self {
         async fn shutdown_signal() {
+            #[cfg(not(target_family = "wasm"))]
             futures::future::select(
                 tokio::signal::ctrl_c().map(|_| ()).boxed(),
                 #[cfg(unix)]
@@ -1649,6 +1645,8 @@ where
                 futures::future::pending::<()>(),
             )
             .await;
+            #[cfg(target_family = "wasm")]
+            futures::future::pending::<()>().await;
         }
 
         let (graceful_tx, graceful_rx) = channel::oneshot::channel();

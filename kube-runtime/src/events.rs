@@ -157,7 +157,10 @@ impl From<String> for Reporter {
 
 impl From<&str> for Reporter {
     fn from(es: &str) -> Self {
+        #[cfg(not(target_family = "wasm"))]
         let instance = hostname::get().ok().and_then(|h| h.into_string().ok());
+        #[cfg(target_family = "wasm")]
+        let instance = None;
         Self {
             controller: es.into(),
             instance,

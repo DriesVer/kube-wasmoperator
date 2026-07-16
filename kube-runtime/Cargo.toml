@@ -12,6 +12,9 @@ keywords = ["kubernetes", "runtime", "reflector", "watcher", "controller"]
 categories = ["web-programming::http-client", "caching", "network-programming"]
 
 [features]
+default = ["client"]
+client = ["kube-client/client"]
+wasi-client = ["kube-client/wasi-client"]
 unstable-runtime = ["unstable-runtime-subscribe", "unstable-runtime-stream-control", "unstable-runtime-reconcile-on"]
 unstable-runtime-subscribe = []
 unstable-runtime-stream-control = []
@@ -27,7 +30,7 @@ workspace = true
 
 [dependencies]
 futures = { workspace = true, features = ["async-await"] }
-kube-client = { path = "../kube-client", version = "=4.0.0", default-features = false, features = ["jsonpatch", "client"] }
+kube-client = { path = "../kube-client", version = "=4.0.0", default-features = false, features = ["jsonpatch"] }
 educe = { workspace = true, features = ["Clone", "Debug", "Hash", "PartialEq"] }
 serde.workspace = true
 ahash.workspace = true
@@ -44,7 +47,10 @@ hashbrown.workspace = true
 k8s-openapi.workspace = true
 async-broadcast.workspace = true
 async-stream.workspace = true
-hostname.workspace = true
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+hostname = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 
 [dev-dependencies]
 kube = { path = "../kube", features = ["derive", "client", "runtime"], version = ">=4" }
