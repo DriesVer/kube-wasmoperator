@@ -28,7 +28,7 @@ edition = "2024"
 rust-version = "1.89.0"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+#unsafe_code = "forbid"
 missing_docs = "deny"
 
 [workspace.dependencies]

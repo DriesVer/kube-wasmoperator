@@ -1,6 +1,8 @@
 //! API helpers for structured interaction with the Kubernetes API
 
 mod core_methods;
+pub use core_methods::WatchStreamReceiver;
+
 #[cfg(feature = "ws")]
 mod remote_command;
 use std::fmt::Debug;

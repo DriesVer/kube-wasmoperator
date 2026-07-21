@@ -32,7 +32,7 @@ impl Config {
             }
         }
 
-        match crate::wit_api::get_default_namespace().await {
+        match crate::wit_api::get_default_namespace() {
             Ok(ns) => {
                 if !ns.is_empty() {
                     return Ok(Self {

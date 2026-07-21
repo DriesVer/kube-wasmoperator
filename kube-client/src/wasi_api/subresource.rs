@@ -27,12 +27,11 @@ where
     /// Fetch the scale subresource
     pub async fn get_scale(&self, name: &str) -> Result<Scale> {
         let result = wit_api::get_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             None,
-            wit_api::Scope::Subresource("scale".to_string()),
-        )
-        .await?;
+            &wit_api::Scope::Subresource("scale".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -57,14 +56,13 @@ where
         };
 
         let result = wit_api::patch_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             self.get_wit_patch_type(patch),
-            patch_str,
-            self.convert_patch_params(pp),
-            wit_api::Scope::Subresource("scale".to_string()),
-        )
-        .await?;
+            &patch_str,
+            &self.convert_patch_params(pp),
+            &wit_api::Scope::Subresource("scale".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -75,13 +73,12 @@ where
     /// Replace the scale subresource
     pub async fn replace_scale(&self, name: &str, pp: &PostParams, data: &Scale) -> Result<Scale> {
         let result = wit_api::replace_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-            self.convert_post_params(pp),
-            wit_api::Scope::Subresource("scale".to_string()),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &name,
+            &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+            &self.convert_post_params(pp),
+            &wit_api::Scope::Subresource("scale".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -98,12 +95,11 @@ where
     /// Display one or many sub-resources.
     pub async fn get_subresource(&self, subresource_name: &str, name: &str) -> Result<K> {
         let result = wit_api::get_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             None,
-            wit_api::Scope::Subresource(subresource_name.to_string()),
-        )
-        .await?;
+            &wit_api::Scope::Subresource(subresource_name.to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -124,13 +120,12 @@ where
         T: DeserializeOwned,
     {
         let result = wit_api::create_subresource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            subresource_name.to_string(),
-            serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-            self.convert_post_params(pp),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &name,
+            &subresource_name,
+            &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+            &self.convert_post_params(pp),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -156,14 +151,13 @@ where
         };
 
         let result = wit_api::patch_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             self.get_wit_patch_type(patch),
-            patch_str,
-            self.convert_patch_params(pp),
-            wit_api::Scope::Subresource(subresource_name.to_string()),
-        )
-        .await?;
+            &patch_str,
+            &self.convert_patch_params(pp),
+            &wit_api::Scope::Subresource(subresource_name.to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -183,13 +177,12 @@ where
         I: Serialize,
     {
         let result = wit_api::replace_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-            self.convert_post_params(pp),
-            wit_api::Scope::Subresource(subresource_name.to_string()),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &name,
+            &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+            &self.convert_post_params(pp),
+            &wit_api::Scope::Subresource(subresource_name.to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -264,13 +257,12 @@ where
         K: Serialize,
     {
         let result = wit_api::replace_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-            self.convert_post_params(pp),
-            wit_api::Scope::Subresource("ephemeralcontainers".to_string()),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &name,
+            &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+            &self.convert_post_params(pp),
+            &wit_api::Scope::Subresource("ephemeralcontainers".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -343,14 +335,13 @@ where
         };
 
         let result = wit_api::patch_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             self.get_wit_patch_type(patch),
-            patch_str,
-            self.convert_patch_params(pp),
-            wit_api::Scope::Subresource("ephemeralcontainers".to_string()),
-        )
-        .await?;
+            &patch_str,
+            &self.convert_patch_params(pp),
+            &wit_api::Scope::Subresource("ephemeralcontainers".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -363,12 +354,11 @@ where
     /// This returns the whole K, with metadata and spec.
     pub async fn get_ephemeral_containers(&self, name: &str) -> Result<K> {
         let result = wit_api::get_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             None,
-            wit_api::Scope::Subresource("ephemeralcontainers".to_string()),
-        )
-        .await?;
+            &wit_api::Scope::Subresource("ephemeralcontainers".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -412,12 +402,12 @@ k8s_openapi::k8s_if_ge_1_33! {
         /// for more details.
         pub async fn get_resize(&self, name: &str) -> Result<K> {
             let result = wit_api::get_resource(
-                self.get_wit_api_resource(),
-                name.to_string(),
+                &self.get_wit_api_resource(),
+                name,
                 None,
-                wit_api::Scope::Subresource("resize".to_string()),
+                &wit_api::Scope::Subresource("resize".to_string()),
             )
-            .await?;
+            ?;
 
             serde_json::from_str(&result).map_err(|e| {
                 tracing::warn!("{}, {:?}", result, e);
@@ -478,14 +468,14 @@ k8s_openapi::k8s_if_ge_1_33! {
             };
 
             let result = wit_api::patch_resource(
-                self.get_wit_api_resource(),
-                name.to_string(),
+                &self.get_wit_api_resource(),
+                name,
                 self.get_wit_patch_type(patch),
-                patch_str,
-                self.convert_patch_params(pp),
-                wit_api::Scope::Subresource("resize".to_string()),
+                &patch_str,
+                &self.convert_patch_params(pp),
+                &wit_api::Scope::Subresource("resize".to_string()),
             )
-            .await?;
+            ?;
 
             serde_json::from_str(&result).map_err(|e| {
                 tracing::warn!("{}, {:?}", result, e);
@@ -532,13 +522,13 @@ k8s_openapi::k8s_if_ge_1_33! {
             K: Serialize,
         {
             let result = wit_api::replace_resource(
-                self.get_wit_api_resource(),
-                name.to_string(),
-                serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-                self.convert_post_params(pp),
-                wit_api::Scope::Subresource("resize".to_string()),
+                &self.get_wit_api_resource(),
+                name,
+                &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+                &self.convert_post_params(pp),
+                &wit_api::Scope::Subresource("resize".to_string()),
             )
-            .await?;
+            ?;
 
             serde_json::from_str(&result).map_err(|e| {
                 tracing::warn!("{}, {:?}", result, e);
@@ -562,12 +552,11 @@ where
     /// This actually returns the whole K, with metadata, and spec.
     pub async fn get_status(&self, name: &str) -> Result<K> {
         let result = wit_api::get_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             None,
-            wit_api::Scope::Subresource("status".to_string()),
-        )
-        .await?;
+            &wit_api::Scope::Subresource("status".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -613,14 +602,13 @@ where
         };
 
         let result = wit_api::patch_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            &name,
             self.get_wit_patch_type(patch),
-            patch_str,
-            self.convert_patch_params(pp),
-            wit_api::Scope::Subresource("status".to_string()),
-        )
-        .await?;
+            &patch_str,
+            &self.convert_patch_params(pp),
+            &wit_api::Scope::Subresource("status".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -651,13 +639,12 @@ where
         K: Serialize,
     {
         let result = wit_api::replace_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-            self.convert_post_params(pp),
-            wit_api::Scope::Subresource("status".to_string()),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &name,
+            &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+            &self.convert_post_params(pp),
+            &wit_api::Scope::Subresource("status".to_string()),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -683,13 +670,8 @@ where
 {
     /// Fetch logs as a string
     pub async fn logs(&self, name: &str, lp: &LogParams) -> Result<String> {
-        wit_api::get_logs_string(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            self.convert_log_params(lp),
-        )
-        .await
-        .map_err(Error::Wit)
+        wit_api::get_logs_string(&self.get_wit_api_resource(), name, &self.convert_log_params(lp))
+            .map_err(Error::Wit)
     }
 
     /// Stream the logs via [`AsyncBufRead`].
@@ -741,13 +723,9 @@ where
 {
     /// Create an eviction
     pub async fn evict(&self, name: &str, ep: &EvictParams) -> Result<Status> {
-        let result_val = wit_api::evict_subresource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            self.convert_evict_params(ep),
-        )
-        .await
-        .map_err(Error::Wit)?;
+        let result_val =
+            wit_api::evict_subresource(&self.get_wit_api_resource(), name, &self.convert_evict_params(ep))
+                .map_err(Error::Wit)?;
 
         serde_json::from_str(&result_val).map_err(|e| {
             tracing::warn!("{}, {:?}", result_val, e);

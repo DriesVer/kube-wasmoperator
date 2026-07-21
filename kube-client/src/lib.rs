@@ -164,6 +164,9 @@ cfg_wasi_client! {
     pub use wasi_client::Client;
     #[doc(inline)]
     pub use discovery::Discovery;
+
+    use wasi_api::WatchStreamReceiver;
+    export!(WatchStreamReceiver);
 }
 
 cfg_config! {

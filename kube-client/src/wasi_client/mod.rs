@@ -63,7 +63,7 @@ impl Client {
 
 impl Client {
     pub async fn apiserver_version(&self) -> Result<k8s_openapi::apimachinery::pkg::version::Info> {
-        let result = wit_api::get_api_server_version().await.map_err(Error::Wit)?;
+        let result = wit_api::get_api_server_version().map_err(Error::Wit)?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -72,9 +72,7 @@ impl Client {
     }
 
     pub async fn list_api_groups(&self) -> Result<k8s_meta_v1::APIGroupList> {
-        let result = wit_api::list_api_version(wit_api::ApiCategory::Named, false)
-            .await
-            .map_err(Error::Wit)?;
+        let result = wit_api::list_api_version(wit_api::ApiCategory::Named, false).map_err(Error::Wit)?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -83,9 +81,8 @@ impl Client {
     }
 
     pub async fn list_api_group_resources(&self, apiversion: &str) -> Result<k8s_meta_v1::APIResourceList> {
-        let result = wit_api::list_api_resources(wit_api::ApiCategory::Named, apiversion.to_string())
-            .await
-            .map_err(Error::Wit)?;
+        let result =
+            wit_api::list_api_resources(wit_api::ApiCategory::Named, apiversion).map_err(Error::Wit)?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -94,9 +91,7 @@ impl Client {
     }
 
     pub async fn list_core_api_versions(&self) -> Result<k8s_meta_v1::APIVersions> {
-        let result = wit_api::list_api_version(wit_api::ApiCategory::Core, false)
-            .await
-            .map_err(Error::Wit)?;
+        let result = wit_api::list_api_version(wit_api::ApiCategory::Core, false).map_err(Error::Wit)?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -105,9 +100,7 @@ impl Client {
     }
 
     pub async fn list_core_api_resources(&self, version: &str) -> Result<k8s_meta_v1::APIResourceList> {
-        let result = wit_api::list_api_resources(wit_api::ApiCategory::Core, version.to_string())
-            .await
-            .map_err(Error::Wit)?;
+        let result = wit_api::list_api_resources(wit_api::ApiCategory::Core, version).map_err(Error::Wit)?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -118,9 +111,7 @@ impl Client {
 
 impl Client {
     pub async fn list_api_groups_aggregated(&self) -> Result<APIGroupDiscoveryList> {
-        let result = wit_api::list_api_version(wit_api::ApiCategory::Named, true)
-            .await
-            .map_err(Error::Wit)?;
+        let result = wit_api::list_api_version(wit_api::ApiCategory::Named, true).map_err(Error::Wit)?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -129,9 +120,7 @@ impl Client {
     }
 
     pub async fn list_core_api_versions_aggregated(&self) -> Result<APIGroupDiscoveryList> {
-        let result = wit_api::list_api_version(wit_api::ApiCategory::Core, true)
-            .await
-            .map_err(Error::Wit)?;
+        let result = wit_api::list_api_version(wit_api::ApiCategory::Core, true).map_err(Error::Wit)?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -147,4 +136,3 @@ impl TryFrom<Config> for Client {
         Ok(ClientBuilder::try_from(config)?.build())
     }
 }
-

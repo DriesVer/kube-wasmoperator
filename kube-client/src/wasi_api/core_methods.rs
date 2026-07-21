@@ -1,5 +1,5 @@
 use either::Either;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, stream};
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 
@@ -225,12 +225,11 @@ where
     /// Consider using [`Api::get_opt`] if you need to handle missing objects.
     pub async fn get_with(&self, name: &str, gp: &GetParams) -> Result<K> {
         let result = wit_api::get_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            gp.resource_version.clone(),
-            self.get_wit_api_scope(),
-        )
-        .await?;
+            &&self.get_wit_api_resource(),
+            name,
+            gp.resource_version.as_deref(),
+            &self.get_wit_api_scope(),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -265,12 +264,11 @@ where
     /// Consider using [`Api::get_metadata_opt`] if you need to handle missing objects.
     pub async fn get_metadata_with(&self, name: &str, gp: &GetParams) -> Result<PartialObjectMeta<K>> {
         let result = wit_api::get_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            gp.resource_version.clone(),
-            wit_api::Scope::MetadataOnly,
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            name,
+            gp.resource_version.as_deref(),
+            &wit_api::Scope::MetadataOnly,
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -378,11 +376,10 @@ where
     /// ```
     pub async fn list(&self, lp: &ListParams) -> Result<ObjectList<K>> {
         let result = wit_api::list_resources(
-            self.get_wit_api_resource(),
-            self.convert_list_params(lp),
-            self.get_wit_api_scope(),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &self.convert_list_params(lp),
+            &self.get_wit_api_scope(),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -413,11 +410,10 @@ where
     /// ```
     pub async fn list_metadata(&self, lp: &ListParams) -> Result<ObjectList<PartialObjectMeta<K>>> {
         let result = wit_api::list_resources(
-            self.get_wit_api_resource(),
-            self.convert_list_params(lp),
-            wit_api::Scope::MetadataOnly,
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &self.convert_list_params(lp),
+            &wit_api::Scope::MetadataOnly,
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -449,11 +445,10 @@ where
         K: Serialize,
     {
         let result = wit_api::create_resource(
-            self.get_wit_api_resource(),
-            serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-            self.convert_post_params(pp),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+            &self.convert_post_params(pp),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -484,12 +479,11 @@ where
     /// ```
     pub async fn delete(&self, name: &str, dp: &DeleteParams) -> Result<Either<K, Status>> {
         let result = wit_api::delete_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            self.convert_delete_params(dp),
-            self.get_wit_api_scope(),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            name,
+            &self.convert_delete_params(dp),
+            &self.get_wit_api_scope(),
+        )?;
 
         let val: serde_json::Value = serde_json::from_str(&result).map_err(Error::SerdeError)?;
         if val.get("kind").and_then(|v| v.as_str()) == Some("Status") {
@@ -534,12 +528,11 @@ where
         lp: &ListParams,
     ) -> Result<Either<ObjectList<K>, Status>> {
         let result = wit_api::delete_collection(
-            self.get_wit_api_resource(),
-            self.convert_delete_params(dp),
-            self.convert_list_params(lp),
-            self.get_wit_api_scope(),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            &self.convert_delete_params(dp),
+            &self.convert_list_params(lp),
+            &self.get_wit_api_scope(),
+        )?;
 
         let val: serde_json::Value = serde_json::from_str(&result).map_err(Error::SerdeError)?;
         if val.get("kind").and_then(|v| v.as_str()) == Some("Status") {
@@ -599,14 +592,13 @@ where
         };
 
         let result = wit_api::patch_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            name,
             self.get_wit_patch_type(patch),
-            patch_str,
-            self.convert_patch_params(pp),
-            self.get_wit_api_scope(),
-        )
-        .await?;
+            &patch_str,
+            &self.convert_patch_params(pp),
+            &self.get_wit_api_scope(),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -666,14 +658,13 @@ where
         };
 
         let result = wit_api::patch_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
+            &self.get_wit_api_resource(),
+            name,
             self.get_wit_patch_type(patch),
-            patch_str,
-            self.convert_patch_params(pp),
-            wit_api::Scope::MetadataOnly,
-        )
-        .await?;
+            &patch_str,
+            &self.convert_patch_params(pp),
+            &wit_api::Scope::MetadataOnly,
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -733,13 +724,12 @@ where
         K: Serialize,
     {
         let result = wit_api::replace_resource(
-            self.get_wit_api_resource(),
-            name.to_string(),
-            serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
-            self.convert_post_params(pp),
-            self.get_wit_api_scope(),
-        )
-        .await?;
+            &self.get_wit_api_resource(),
+            name,
+            &serde_json::to_string(data).map_err(|e| Error::SerdeError(e))?,
+            &self.convert_post_params(pp),
+            &self.get_wit_api_scope(),
+        )?;
 
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
@@ -826,16 +816,16 @@ where
         &self,
         wp: &WatchParams,
         version: &str,
-    ) -> Result<impl Stream<Item = Result<WatchEvent<K>>> + use<K>> {
-        let stream = wit_api::watch_resource(
+    ) -> Result<impl Stream<Item = Result<WatchEvent<K>>> + use<K>>
+    where
+        K: DeserializeOwned + Debug + Send + 'static,
+    {
+        WatchStreamHandler::watch_resource(
             self.get_wit_api_resource(),
-            version.to_string(),
             self.convert_watch_params(wp),
+            version,
             self.get_wit_api_scope(),
         )
-        .await?;
-
-        Ok(Self::transform_watch_stream(stream.into_stream()))
     }
 
     /// Watch a list of metadata for a given resources
@@ -881,15 +871,116 @@ where
         &self,
         wp: &WatchParams,
         version: &str,
-    ) -> Result<impl Stream<Item = Result<WatchEvent<PartialObjectMeta<K>>>> + use<K>> {
-        let stream = wit_api::watch_resource(
+    ) -> Result<impl Stream<Item = Result<WatchEvent<PartialObjectMeta<K>>>> + use<K>>
+    where
+        K: DeserializeOwned + Debug + Send + 'static,
+    {
+        WatchStreamHandler::watch_resource(
             self.get_wit_api_resource(),
-            version.to_string(),
             self.convert_watch_params(wp),
+            version,
             wit_api::Scope::MetadataOnly,
         )
-        .await?;
+    }
+}
 
-        Ok(Self::transform_watch_stream(stream.into_stream()))
+// Watch stream handler
+// Maybe move inside Api<K>
+
+use dashmap::DashMap;
+use std::any::Any;
+use std::sync::{Arc, LazyLock};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+
+type WatchId = u32;
+
+struct WatchStreamHandler {
+    pub map: DashMap<WatchId, Box<dyn Any + Send + Sync>>,
+}
+
+static WATCH_STREAM_HANDLER: LazyLock<Arc<WatchStreamHandler>> =
+    LazyLock::new(|| Arc::new(WatchStreamHandler { map: DashMap::new() }));
+
+impl WatchStreamHandler {
+    pub fn get_instance() -> Arc<Self> {
+        Arc::clone(&WATCH_STREAM_HANDLER)
+    }
+
+    pub fn watch_resource<K>(
+        api: wit_api::ApiResource,
+        watch_params: wit_api::WatchParams,
+        version: &str,
+        scope: wit_api::Scope,
+    ) -> Result<impl Stream<Item = Result<WatchEvent<K>>> + use<K>>
+    where
+        K: Clone + DeserializeOwned + Debug + Send + 'static,
+    {
+        // Start a new watch stream for the resource on the host
+        let id = wit_api::subscribe_watch_stream(&api, version, &watch_params, &scope)?;
+
+        // Create a new channel and stream for the watch events
+        let (tx, rx): (
+            UnboundedSender<Result<WatchEvent<K>>>,
+            UnboundedReceiver<Result<WatchEvent<K>>>,
+        ) = mpsc::unbounded_channel();
+        let stream = UnboundedReceiverStream::new(rx);
+
+        // Store the sender in the map for later use
+        WATCH_STREAM_HANDLER.map.insert(id.clone(), Box::new(tx));
+
+        Ok(stream)
+    }
+}
+
+pub struct WatchStreamReceiver;
+
+impl crate::Guest for WatchStreamReceiver {
+    fn receive_watch_event(watch_id: wit_api::WatchId, event: wit_api::WatchEvent) -> Result<(), ()> {
+        let stream_handler = WatchStreamHandler::get_instance();
+
+        let boxed_tx = stream_handler.map.get(&watch_id).ok_or(())?;
+
+        let tx = boxed_tx
+            .downcast_ref::<UnboundedSender<Result<WatchEvent<serde_json::Value>>>>()
+            .ok_or(())?;
+
+        let parse = |s: &str| {
+            serde_json::from_str::<serde_json::Value>(s)
+                .map_err(|e| {
+                    tracing::warn!("{}, {:?}", s, e);
+                    Error::SerdeError(e)
+                })
+                .unwrap()
+        };
+        let kube_event = match event {
+            wit_api::WatchEvent::Added(s) => Ok(WatchEvent::Added(parse(&s))),
+            wit_api::WatchEvent::Modified(s) => Ok(WatchEvent::Modified(parse(&s))),
+            wit_api::WatchEvent::Deleted(s) => Ok(WatchEvent::Deleted(parse(&s))),
+            wit_api::WatchEvent::Bookmark(s) => {
+                let bookmark = serde_json::from_str::<kube_core::watch::Bookmark>(&s)
+                    .map_err(|e| {
+                        tracing::warn!("{}, {:?}", s, e);
+                        Error::SerdeError(e)
+                    })
+                    .unwrap();
+                Ok(WatchEvent::Bookmark(bookmark))
+            }
+            wit_api::WatchEvent::Error(wit_error) => {
+                let status: Status = serde_json::from_value(serde_json::json!({
+                    "status": "Failure",
+                    "message": format!("wit_error: {:?}", wit_error),
+                    "reason": "WitError",
+                    "code": 500,
+                }))
+                .unwrap();
+                Ok(WatchEvent::Error(Box::new(status)))
+            }
+        };
+
+        tx.send(kube_event).map_err(|_| ())?;
+
+        Ok(())
     }
 }

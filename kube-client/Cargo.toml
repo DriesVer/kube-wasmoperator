@@ -31,7 +31,7 @@ config = ["__non_core", "pem"]
 socks5 = ["hyper-util/client-proxy"]
 http-proxy = ["hyper-util/client-proxy"]
 unstable-client = []
-wasi-client = ["dep:wit-bindgen", "dep:wasip3", "wasi-config", "jiff", "jsonpath-rust", "bytes", "futures", "tokio", "tokio-util", "either", "tracing"]
+wasi-client = ["dep:wit-bindgen", "wasi-config", "jiff", "jsonpath-rust", "bytes", "futures", "tokio", "tokio-util", "either", "tracing"]
 wasi-config = []
 
 # private feature sets; do not use
@@ -81,7 +81,9 @@ form_urlencoded = { workspace = true, optional = true }
 k8s-openapi= { workspace = true, features = [] }
 
 wit-bindgen = { version = "0.59.0", features = ["async", "futures-stream"], optional = true }
-wasip3 = { version = "0.7.0", optional = true }
+dashmap = "6.2.1"
+tokio-stream = "0.1.18"
+#wasip3 = { version = "0.7.0", optional = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["signal"], optional = true }
