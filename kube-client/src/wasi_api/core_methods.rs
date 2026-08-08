@@ -1,5 +1,5 @@
 use either::Either;
-use futures::{Stream, StreamExt, stream};
+use futures::{Stream, StreamExt};
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use tracing::warn;
@@ -910,7 +910,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-type WatchId = u32;
+type WatchId = wit_api::WatchId;
 
 trait WatchEventDispatcher: Send + Sync {
     fn dispatch(&self, event: wit_api::WatchEvent) -> Result<(), Error>;
