@@ -2,6 +2,7 @@ use either::Either;
 use futures::{Stream, StreamExt, stream};
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
+use tracing::warn;
 
 use crate::{Api, Error, EvictParams, LogParams, Result, wit_api};
 use kube_core::{WatchEvent, metadata::PartialObjectMeta, object::ObjectList, params::*, response::Status};
@@ -761,13 +762,29 @@ where
                         Ok(WatchEvent::Bookmark(bookmark))
                     }
                     wit_api::WatchEvent::Error(wit_error) => {
-                        let status: Status = serde_json::from_value(serde_json::json!({
-                            "status": "Failure",
-                            "message": format!("wit_error: {:?}", wit_error),
-                            "reason": "WitError",
-                            "code": 500,
-                        }))
-                        .unwrap();
+                        let status: Status = match wit_error {
+                            wit_api::Error::Http(http_err) => serde_json::from_value(serde_json::json!({
+                                "status": "Failure",
+                                "message": http_err.message,
+                                "reason": http_err.reason,
+                                "code": http_err.code,
+                            }))
+                            .unwrap(),
+                            wit_api::Error::NotFound => serde_json::from_value(serde_json::json!({
+                                "status": "Failure",
+                                "message": "Resource not found",
+                                "reason": "NotFound",
+                                "code": 404,
+                            }))
+                            .unwrap(),
+                            wit_api::Error::Other(msg) => serde_json::from_value(serde_json::json!({
+                                "status": "Failure",
+                                "message": msg,
+                                "reason": "Other",
+                                "code": 500,
+                            }))
+                            .unwrap(),
+                        };
                         Ok(WatchEvent::Error(Box::new(status)))
                     }
                 }
@@ -888,7 +905,6 @@ where
 // Maybe move inside Api<K>
 
 use dashmap::DashMap;
-use std::any::Any;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -896,8 +912,53 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 type WatchId = u32;
 
+trait WatchEventDispatcher: Send + Sync {
+    fn dispatch(&self, event: wit_api::WatchEvent) -> Result<(), Error>;
+}
+
+impl<K> WatchEventDispatcher for UnboundedSender<Result<WatchEvent<K>>>
+where
+    K: DeserializeOwned + Send + 'static,
+{
+    fn dispatch(&self, event: wit_api::WatchEvent) -> Result<(), Error> {
+        let parse = |s: &str| -> Result<K, Error> {
+            serde_json::from_str::<K>(s).map_err(|e| {
+                tracing::warn!("Failed to deserialize watch event payload ({}): {:?}", s, e);
+                Error::SerdeError(e)
+            })
+        };
+
+        let kube_event: Result<WatchEvent<K>> = match event {
+            wit_api::WatchEvent::Added(s) => parse(&s).map(WatchEvent::Added),
+            wit_api::WatchEvent::Modified(s) => parse(&s).map(WatchEvent::Modified),
+            wit_api::WatchEvent::Deleted(s) => parse(&s).map(WatchEvent::Deleted),
+            wit_api::WatchEvent::Bookmark(s) => serde_json::from_str::<kube_core::watch::Bookmark>(&s)
+                .map(WatchEvent::Bookmark)
+                .map_err(|e| {
+                    tracing::warn!("Failed to deserialize bookmark JSON: {}, error: {:?}", s, e);
+                    Error::SerdeError(e)
+                }),
+            wit_api::WatchEvent::Error(wit_error) => {
+                let status: Status = serde_json::from_value(serde_json::json!({
+                    "status": "Failure",
+                    "message": format!("wit_error: {:?}", wit_error),
+                    "reason": "WitError",
+                    "code": 500,
+                }))
+                .map_err(|e| Error::SerdeError(e))?;
+                Ok(WatchEvent::Error(Box::new(status)))
+            }
+        };
+
+        // TODO: Better error type needed
+        self.send(kube_event).map_err(|e| Error::Wasi(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
 struct WatchStreamHandler {
-    pub map: DashMap<WatchId, Box<dyn Any + Send + Sync>>,
+    pub map: DashMap<WatchId, Box<dyn WatchEventDispatcher>>,
 }
 
 static WATCH_STREAM_HANDLER: LazyLock<Arc<WatchStreamHandler>> =
@@ -937,50 +998,25 @@ impl WatchStreamHandler {
 pub struct WatchStreamReceiver;
 
 impl crate::Guest for WatchStreamReceiver {
-    fn receive_watch_event(watch_id: wit_api::WatchId, event: wit_api::WatchEvent) -> Result<(), ()> {
+    fn receive_watch_event(
+        watch_id: wit_api::WatchId,
+        event: wit_api::WatchEvent,
+    ) -> Result<(), wit_api::Error> {
+        // TODO: remove log, only debug
+        warn!(
+            "[Guest] Currently {} watch streams are active",
+            WATCH_STREAM_HANDLER.map.len()
+        );
+
         let stream_handler = WatchStreamHandler::get_instance();
 
-        let boxed_tx = stream_handler.map.get(&watch_id).ok_or(())?;
+        let dispatcher = stream_handler
+            .map
+            .get(&watch_id)
+            .ok_or_else(|| wit_api::Error::NotFound)?;
 
-        let tx = boxed_tx
-            .downcast_ref::<UnboundedSender<Result<WatchEvent<serde_json::Value>>>>()
-            .ok_or(())?;
-
-        let parse = |s: &str| {
-            serde_json::from_str::<serde_json::Value>(s)
-                .map_err(|e| {
-                    tracing::warn!("{}, {:?}", s, e);
-                    Error::SerdeError(e)
-                })
-                .unwrap()
-        };
-        let kube_event = match event {
-            wit_api::WatchEvent::Added(s) => Ok(WatchEvent::Added(parse(&s))),
-            wit_api::WatchEvent::Modified(s) => Ok(WatchEvent::Modified(parse(&s))),
-            wit_api::WatchEvent::Deleted(s) => Ok(WatchEvent::Deleted(parse(&s))),
-            wit_api::WatchEvent::Bookmark(s) => {
-                let bookmark = serde_json::from_str::<kube_core::watch::Bookmark>(&s)
-                    .map_err(|e| {
-                        tracing::warn!("{}, {:?}", s, e);
-                        Error::SerdeError(e)
-                    })
-                    .unwrap();
-                Ok(WatchEvent::Bookmark(bookmark))
-            }
-            wit_api::WatchEvent::Error(wit_error) => {
-                let status: Status = serde_json::from_value(serde_json::json!({
-                    "status": "Failure",
-                    "message": format!("wit_error: {:?}", wit_error),
-                    "reason": "WitError",
-                    "code": 500,
-                }))
-                .unwrap();
-                Ok(WatchEvent::Error(Box::new(status)))
-            }
-        };
-
-        tx.send(kube_event).map_err(|_| ())?;
-
-        Ok(())
+        dispatcher
+            .dispatch(event)
+            .map_err(|e| wit_api::Error::Other(e.to_string()))
     }
 }

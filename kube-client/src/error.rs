@@ -134,7 +134,19 @@ pub enum Error {
 #[cfg(feature = "wasi-client")]
 impl From<crate::wit_api::Error> for Error {
     fn from(e: crate::wit_api::Error) -> Self {
-        Error::Wit(e)
+        match e {
+            crate::wit_api::Error::Http(http_err) => {
+                let status: Status = serde_json::from_value(serde_json::json!({
+                    "status": "Failure",
+                    "message": http_err.message,
+                    "reason": http_err.reason,
+                    "code": http_err.code,
+                }))
+                .unwrap();
+                Error::Api(Box::new(status))
+            }
+            _ => Error::Wit(e),
+        }
     }
 }
 

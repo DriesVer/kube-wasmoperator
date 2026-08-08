@@ -142,18 +142,24 @@ cfg_client! {
 }
 
 cfg_wasi_client! {
-    wit_bindgen::generate!({
-        world: "kubernetes",
-        path: "../../wit",
-    });
-
-    pub use local::kube::api as wit_api;
-
     pub mod wasi_api;
     pub use wasi_api as api;
     pub mod discovery;
     pub mod wasi_client;
     pub use wasi_client as client;
+
+    mod bindings {
+        wit_bindgen::generate!({
+            world: "kubernetes",
+            path: "../../wit",
+        });
+
+        use super::wasi_api::WatchStreamReceiver;
+        export!(WatchStreamReceiver);
+    }
+
+    pub use bindings::Guest;
+    pub use bindings::local::kube::api as wit_api;
 
     #[doc(inline)]
     pub use wasi_api::{
@@ -164,9 +170,6 @@ cfg_wasi_client! {
     pub use wasi_client::Client;
     #[doc(inline)]
     pub use discovery::Discovery;
-
-    use wasi_api::WatchStreamReceiver;
-    export!(WatchStreamReceiver);
 }
 
 cfg_config! {
