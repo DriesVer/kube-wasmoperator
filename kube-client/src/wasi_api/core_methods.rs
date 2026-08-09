@@ -1001,12 +1001,6 @@ impl crate::Guest for WatchStreamReceiver {
         watch_id: wit_api::WatchId,
         event: wit_api::WatchEvent,
     ) -> Result<(), wit_api::Error> {
-        // TODO: remove log, only debug
-        warn!(
-            "[Guest] Currently {} watch streams are active",
-            WATCH_STREAM_HANDLER.map.len()
-        );
-
         let stream_handler = WatchStreamHandler::get_instance();
 
         let dispatcher = stream_handler
