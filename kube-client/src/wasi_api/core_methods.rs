@@ -117,7 +117,6 @@ impl<K> Api<K> {
         wit_api::WatchParams {
             label_selector: wp.label_selector.clone(),
             field_selector: wp.field_selector.clone(),
-            timeout: wp.timeout,
             bookmark: wp.bookmarks,
             send_initial_events: wp.send_initial_events,
         }
