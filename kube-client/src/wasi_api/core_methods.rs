@@ -1,8 +1,7 @@
 use either::Either;
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
-use tracing::warn;
 
 use crate::{Api, Error, EvictParams, LogParams, Result, wit_api};
 use kube_core::{WatchEvent, metadata::PartialObjectMeta, object::ObjectList, params::*, response::Status};
@@ -225,7 +224,7 @@ where
     /// Consider using [`Api::get_opt`] if you need to handle missing objects.
     pub async fn get_with(&self, name: &str, gp: &GetParams) -> Result<K> {
         let result = wit_api::get_resource(
-            &&self.get_wit_api_resource(),
+            &self.get_wit_api_resource(),
             name,
             gp.resource_version.as_deref(),
             &self.get_wit_api_scope(),
@@ -734,60 +733,6 @@ where
         serde_json::from_str(&result).map_err(|e| {
             tracing::warn!("{}, {:?}", result, e);
             Error::SerdeError(e)
-        })
-    }
-
-    fn transform_watch_stream<T: DeserializeOwned>(
-        stream: impl Stream<Item = std::result::Result<wit_api::WatchEvent, wit_api::Error>>,
-    ) -> impl Stream<Item = Result<WatchEvent<T>>> {
-        stream.map(|event| {
-            event.map_err(Error::from).and_then(|wit_watch_event| {
-                let parse = |s: &str| {
-                    serde_json::from_str::<T>(s).map_err(|e| {
-                        tracing::warn!("{}, {:?}", s, e);
-                        Error::SerdeError(e)
-                    })
-                };
-                match wit_watch_event {
-                    wit_api::WatchEvent::Added(s) => Ok(WatchEvent::Added(parse(&s)?)),
-                    wit_api::WatchEvent::Modified(s) => Ok(WatchEvent::Modified(parse(&s)?)),
-                    wit_api::WatchEvent::Deleted(s) => Ok(WatchEvent::Deleted(parse(&s)?)),
-                    wit_api::WatchEvent::Bookmark(s) => {
-                        let bookmark =
-                            serde_json::from_str::<kube_core::watch::Bookmark>(&s).map_err(|e| {
-                                tracing::warn!("{}, {:?}", s, e);
-                                Error::SerdeError(e)
-                            })?;
-                        Ok(WatchEvent::Bookmark(bookmark))
-                    }
-                    wit_api::WatchEvent::Error(wit_error) => {
-                        let status: Status = match wit_error {
-                            wit_api::Error::Http(http_err) => serde_json::from_value(serde_json::json!({
-                                "status": "Failure",
-                                "message": http_err.message,
-                                "reason": http_err.reason,
-                                "code": http_err.code,
-                            }))
-                            .unwrap(),
-                            wit_api::Error::NotFound => serde_json::from_value(serde_json::json!({
-                                "status": "Failure",
-                                "message": "Resource not found",
-                                "reason": "NotFound",
-                                "code": 404,
-                            }))
-                            .unwrap(),
-                            wit_api::Error::Other(msg) => serde_json::from_value(serde_json::json!({
-                                "status": "Failure",
-                                "message": msg,
-                                "reason": "Other",
-                                "code": 500,
-                            }))
-                            .unwrap(),
-                        };
-                        Ok(WatchEvent::Error(Box::new(status)))
-                    }
-                }
-            })
         })
     }
 
