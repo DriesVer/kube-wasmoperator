@@ -883,18 +883,31 @@ where
                     Error::SerdeError(e)
                 }),
             wit_api::WatchEvent::Error(wit_error) => {
-                let status: Status = serde_json::from_value(serde_json::json!({
-                    "status": "Failure",
-                    "message": format!("wit_error: {:?}", wit_error),
-                    "reason": "WitError",
-                    "code": 500,
-                }))
+                let status: Status = match &wit_error {
+                    wit_api::Error::Http(http_error) => serde_json::from_value(serde_json::json!({
+                        "status": "Failure",
+                        "message": http_error.message,
+                        "reason": http_error.reason,
+                        "code": http_error.code,
+                    })),
+                    _ => serde_json::from_value(serde_json::json!({
+                        "status": "Failure",
+                        "message": format!("wit_error: {:?}", wit_error),
+                        "reason": "WitError",
+                        "code": 500,
+                    })),
+                }
                 .map_err(|e| Error::SerdeError(e))?;
                 Ok(WatchEvent::Error(Box::new(status)))
             }
+            wit_api::WatchEvent::UpgradeBookmark((new_id, bookmark)) => {
+                panic!(
+                    "UpgradeBookmark should be handled in receive_watch_event, not dispatched to the stream: new_id={:?}, bookmark={:?}",
+                    new_id, bookmark
+                );
+            }
         };
 
-        // TODO: Better error type needed
         self.send(kube_event).map_err(|e| Error::Wasi(e.to_string()))?;
 
         Ok(())
@@ -902,7 +915,7 @@ where
 }
 
 struct WatchStreamHandler {
-    pub map: DashMap<WatchId, Box<dyn WatchEventDispatcher>>,
+    pub map: DashMap<WatchId, Arc<dyn WatchEventDispatcher>>,
 }
 
 static WATCH_STREAM_HANDLER: LazyLock<Arc<WatchStreamHandler>> =
@@ -933,7 +946,7 @@ impl WatchStreamHandler {
         let stream = UnboundedReceiverStream::new(rx);
 
         // Store the sender in the map for later use
-        WATCH_STREAM_HANDLER.map.insert(id.clone(), Box::new(tx));
+        WATCH_STREAM_HANDLER.map.insert(id, Arc::new(tx));
 
         Ok(stream)
     }
@@ -944,14 +957,31 @@ pub struct WatchStreamReceiver;
 impl crate::Guest for WatchStreamReceiver {
     fn receive_watch_event(
         watch_id: wit_api::WatchId,
-        event: wit_api::WatchEvent,
+        mut event: wit_api::WatchEvent,
     ) -> Result<(), wit_api::Error> {
         let stream_handler = WatchStreamHandler::get_instance();
 
-        let dispatcher = stream_handler
-            .map
-            .get(&watch_id)
-            .ok_or_else(|| wit_api::Error::NotFound)?;
+        let dispatcher = match &event {
+            wit_api::WatchEvent::UpgradeBookmark((new_id, _)) => {
+                // Remove old watch ID directly to avoid lock contention
+                let (_, dispatcher) = stream_handler
+                    .map
+                    .remove(&watch_id)
+                    .ok_or_else(|| wit_api::Error::NotFound)?;
+
+                stream_handler.map.insert(new_id.clone(), Arc::clone(&dispatcher));
+                dispatcher
+            }
+            _ => stream_handler
+                .map
+                .get(&watch_id)
+                .map(|r| Arc::clone(r.value()))
+                .ok_or_else(|| wit_api::Error::NotFound)?,
+        };
+
+        if let wit_api::WatchEvent::UpgradeBookmark((_, bookmark)) = event {
+            event = wit_api::WatchEvent::Bookmark(bookmark);
+        }
 
         dispatcher
             .dispatch(event)

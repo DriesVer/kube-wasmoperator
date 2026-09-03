@@ -530,15 +530,26 @@ async fn next_with_idle_timeout<S, T>(stream: &mut S, timeout: Option<u32>) -> O
 where
     S: Stream<Item = T> + Unpin,
 {
-    let idle_timeout = Duration::from_secs(u64::from(timeout.unwrap_or(290))) + WATCH_IDLE_TIMEOUT_MARGIN;
-    match tokio::time::timeout(idle_timeout, stream.next()).await {
-        Ok(item) => item,
-        Err(_elapsed) => {
-            debug!(
-                timeout_secs = idle_timeout.as_secs(),
-                "watch stream idle timeout, reconnecting"
-            );
-            None
+    #[cfg(target_os = "wasi")]
+    {
+        // Inside WASI, the host manages the stream vitality.
+        // We wait indefinitely because monotonic time jumps when the operator is suspended,
+        // which would cause spurious timeouts.
+        return stream.next().await;
+    }
+
+    #[cfg(not(target_os = "wasi"))]
+    {
+        let idle_timeout = Duration::from_secs(u64::from(timeout.unwrap_or(290))) + WATCH_IDLE_TIMEOUT_MARGIN;
+        match tokio::time::timeout(idle_timeout, stream.next()).await {
+            Ok(item) => item,
+            Err(_elapsed) => {
+                debug!(
+                    timeout_secs = idle_timeout.as_secs(),
+                    "watch stream idle timeout, reconnecting"
+                );
+                None
+            }
         }
     }
 }
