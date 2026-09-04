@@ -1,8 +1,7 @@
 //! Runs a user-supplied reconciler function on objects when they (or related objects) are updated
 
 use self::runner::Runner;
-#[allow(deprecated)]
-use crate::watcher::metadata_watcher;
+#[allow(deprecated)] use crate::watcher::metadata_watcher;
 use crate::{
     reflector::{
         self, ObjectRef, reflector,
